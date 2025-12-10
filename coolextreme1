@@ -1,0 +1,90 @@
+/*** Palawan Rent A Car — Booking Receiver
+ *  Saves to Google Sheet + sends email notification
+ *  Adds Booking Reference ID
+ *  Email is now mandatory server-side
+ ***/
+
+const SHEET_NAME = "Sheet1";      // Change if your sheet tab name is different
+const NOTIFY_EMAIL = "palawanrentacar@gmail.com";
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+
+    // 🔐 SERVER-SIDE VALIDATION
+    if (!data.email || data.email.trim() === "") {
+      return errorResponse("Missing customer email");
+    }
+    if (!data.fullname || data.fullname.trim() === "") {
+      return errorResponse("Missing customer name");
+    }
+
+    // Create a Booking Reference ID
+    const ref = "PRC-" + Date.now().toString(36).toUpperCase();
+
+    // Append data to sheet
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName(SHEET_NAME);
+    sh.appendRow([
+      ref,
+      new Date(),
+      data.fullname,
+      data.contact,
+      data.email,
+      data.vehicle,
+      data.pickupLoc,
+      data.pickupDate,
+      data.pickupTime,
+      data.dropoffLoc,
+      data.returnDate,
+      data.dropoffTime,
+      data.days,
+      data.notes,
+      data.total
+    ]);
+
+    // Notify via Email
+    const subject = `📌 New Booking — Ref: ${ref}`;
+    const body = `
+New Booking Received!
+
+Reference: ${ref}
+Customer: ${data.fullname}
+Email: ${data.email}
+Contact: ${data.contact}
+
+Vehicle: ${data.vehicle}
+Pickup: ${data.pickupLoc}
+Pickup Date/Time: ${data.pickupDate} ${data.pickupTime}
+
+Drop-off: ${data.dropoffLoc}
+Drop-off Date/Time: ${data.returnDate} ${data.dropoffTime}
+
+Days: ${data.days}
+Notes: ${data.notes}
+
+TOTAL: ₱${Number(data.total).toLocaleString()}
+
+Submitted using Palawan Booking Page
+`;
+    MailApp.sendEmail(NOTIFY_EMAIL, subject, body);
+
+    return successResponse({ ok: true, reference: ref });
+
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+
+// Helpers — return valid web JSON response
+function successResponse(obj) {
+  return ContentService.createTextOutput(
+    JSON.stringify(obj)
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+function errorResponse(msg) {
+  return ContentService.createTextOutput(
+    JSON.stringify({ ok: false, error: String(msg) })
+  ).setMimeType(ContentService.MimeType.JSON);
+}
